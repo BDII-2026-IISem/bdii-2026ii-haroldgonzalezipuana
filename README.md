@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/logo-uniguajira.webp" alt="Universidad de La Guajira" width="300">
+</p>
+
 # Documentación: Configuración de Motores de Base de Datos con Docker Compose
 
 **Autor:** Harold Segundo Gonzalez  
@@ -16,8 +20,6 @@
 5. [Configuración de PostgreSQL](#5-configuración-de-postgresql)
 6. [Configuración de SQL Server](#6-configuración-de-sql-server)
 7. [Conexiones desde DBeaver](#7-conexiones-desde-dbeaver)
-8. [Resumen de Credenciales](#8-resumen-de-credenciales)
-9. [Conclusiones](#9-conclusiones)
 
 ---
 
@@ -188,9 +190,367 @@ sudo docker exec mysql-server mysqldump -u harold -p123456 harold_db > /mnt/d/ac
 ```
 ![Bakuup](images/mysql-backup-verify.png)
 
-## Configuración de PostgreSQL
+## 5. Configuración de PostgreSQL
 
 ## 5.1 Archivos de configuración
-Se crearon los archivos de configuración para PostgreSQL. El archivo .env define el usuario administrador (ialab), la contraseña y la base de datos inicial.
+
+Se crearon los archivos de configuración para PostgreSQL. El archivo `.env` define el usuario administrador (`ialab`), la contraseña y la base de datos inicial.
 
 docker-compose.yml:
+
+```bash
+```yaml
+services:
+  postgres:
+    image: postgres:17
+    container_name: ia-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5433:5432"
+    volumes:
+      - ../../../data/postgres:/var/lib/postgresql/data
+    networks:
+      - ia-lab-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  ia-lab-network:
+    external: true
+```
+![postgres-compose.png](images/postgres-compose.png)
+
+.env:
+
+```bash
+TZ=America/Bogota
+POSTGRES_DB=ialab
+POSTGRES_USER=ialab
+POSTGRES_PASSWORD=123456
+PGDATA=/var/lib/postgresql/data
+```
+![postgres-env](images/postgres-env.png)
+
+README.md:
+
+```bash
+
+> **Acceso remoto habilitado.** Puerto expuesto en `0.0.0.0:5433`.
+> **Usuario por defecto:** `ialab` (acceso remoto: sin restriccion de host)
+```
+![postgres-readme](images/postgres-readme.png)
+
+## 5.3 Creación de usuario propio
+
+Se conectó a PostgreSQL como usuario ialab y se creó el usuario harold con permisos de superusuario y acceso a la base de datos harold_db.
+
+```bash
+sudo docker exec -it ia-postgres psql -U ialab -d ialab
+# Password: 123456
+```
+
+```bash
+CREATE DATABASE harold_db;
+\c harold_db;
+CREATE USER harold WITH PASSWORD '123456';
+ALTER USER harold WITH SUPERUSER;
+GRANT ALL PRIVILEGES ON DATABASE harold_db TO harold;
+\du
+```
+![Creacion de nuevo usuario](images/postgres-create-user.png)
+
+## 5.4 Prueba del nuevo usuario
+
+Se probó la conexión al servidor PostgreSQL utilizando el nuevo usuario harold para verificar que funciona correctamente.
+
+```bash
+sudo docker exec -it ia-postgres psql -U harold -d harold_db
+# Password: 123456
+\list
+```
+![Prueba de nuevo usuario](images/postgres-harold-test.png)
+
+## 5.5 Prueba de conexión desde DBeaver
+
+Una vez creado el usuario harold, se procedió a probar la conexión remota desde DBeaver.
+
+Obtener la IP de WSL:
+
+```bash
+hostname -I
+# IP obtenida: 172.24.20.10
+```
+![ip](images/ip-wls-postgres.png)
+![dbeaver](images/postgres-dbeaver.png)
+
+## 5.6 Backup de la base de datos
+
+Se realizó una copia de seguridad de la base de datos harold_db utilizando el usuario harold.
+
+```bash
+sudo docker exec ia-postgres pg_dump -U harold -d harold_db > /mnt/d/academia/bd/backup_postgres_harold_db_$(date +%Y%m%d).sql
+```
+![backup](images/postgres-backup.png)
+
+## 6. Configuración de SQL Server
+
+## 6.1 Archivos de configuración
+
+Se crearon los archivos de configuración para SQL Server. El archivo `.env` incluye la aceptación de la licencia y la contraseña del usuario `SA` con los requisitos de complejidad.
+
+docker-compose.yml:
+
+```bash
+```yaml
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: sqlserver-container
+    restart: unless-stopped
+    user: root
+    env_file:
+      - .env
+    ports:
+      - "1433:1433"
+    volumes:
+      - ../../../data/mssql:/var/opt/mssql
+    networks:
+      - ia-lab-network
+
+networks:
+  ia-lab-network:
+    external: true
+```
+
+![yml](images/mssql-compose.png)
+
+.env:
+
+```bash
+ACCEPT_EULA=Y
+MSSQL_SA_PASSWORD=SqlServer2026!
+MSSQL_PID=Developer
+```
+
+![env](images/mssql-env.png)
+
+README.md:
+
+```bash
+# SQL Server 2022 - Motor de Base de Datos
+
+> **Acceso remoto habilitado.** Puerto expuesto en `0.0.0.0:1433`.
+> **Usuario por defecto:** `SA` (acceso remoto: habilitado por defecto)
+```
+
+![readme](images/mssql-readme.png)
+
+## 6.2 Levantar el contenedor
+
+Se levantó el contenedor de SQL Server con el puerto 1433 expuesto.
+
+```bash
+cd ~/ia-lab/services/motores-bd/mssql
+sudo docker compose up -d
+```
+
+![levantar contenedor](images/mssql-running.png)
+
+## 6.3 Creación de usuario propio
+Se conectó a SQL Server como usuario SA y se creó el usuario harold con permisos de administrador.
+
+```bash
+sudo docker exec -it sqlserver-container /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'SqlServer2026!' -C
+```
+![conctar localmente](images/mssql-conexion-local.png)
+```bash
+CREATE DATABASE harold_db;
+GO
+CREATE LOGIN harold WITH PASSWORD = '123456';
+GO
+USE harold_db;
+GO
+CREATE USER harold FOR LOGIN harold;
+GO
+ALTER ROLE db_owner ADD MEMBER harold;
+GO
+ALTER SERVER ROLE sysadmin ADD MEMBER harold;
+GO
+SELECT name, type_desc FROM sys.sql_logins WHERE name = 'harold';
+GO
+```
+![creacion de usuario](images/mssql-create-user.png)
+
+## 6.4 Prueba del nuevo usuario
+
+Se probó la conexión al servidor SQL Server utilizando el nuevo usuario harold para verificar que funciona correctamente.
+
+```bash
+sudo docker exec -it sqlserver-container /opt/mssql-tools18/bin/sqlcmd -S localhost -U harold -P '123456' -C
+```
+![](images/mssql-conexion-remote.png)
+```bash
+SELECT @@VERSION;
+GO
+```
+
+## 6.5 Prueba de conexión desde DBeaver
+
+Una vez creado el usuario harold, se procedió a probar la conexión remota desde DBeaver.
+
+Obtener la IP de WSL:
+
+```bash
+hostname -I
+# IP obtenida: 172.24.20.10
+```
+![ip](images/ip-wls-postgres.png)
+![estableciendo conexion](images/mssql-dbeaver.png)
+![test](images/mssql-dbeaver-test.png)
+
+## 6.6 Backup de la base de datos
+
+Se realizó una copia de seguridad de la base de datos harold_db utilizando el comando BACKUP DATABASE.
+
+```bash
+sudo docker exec sqlserver-container /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'SqlServer2026!' -C -Q "BACKUP DATABASE [harold_db] TO DISK = N'/var/opt/mssql/backup_harold_db.bak'"
+```
+
+![backup](images/mssql-backup.png)
+
+## 7. Configuración de Oracle XE
+
+## 7.1 Archivos de configuración
+
+Se crearon los archivos de configuración para Oracle XE. El archivo `.env` incluye la contraseña del usuario `SYSTEM` y el nombre de la instancia.
+
+**docker-compose.yml:**
+
+```bash
+```yaml
+services:
+  oracle:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: oracle-xe
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "1521:1521"
+      - "8080:8080"
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    networks:
+      - ia-lab-network
+
+networks:
+  ia-lab-network:
+    external: true
+
+volumes:
+  oracle-data:
+```
+![yml](images/oracle-compose.png)
+
+.env:
+
+```bash
+ORACLE_PASSWORD=123456
+ORACLE_DATABASE=XE
+```
+![env](images/oracle-env.png)
+
+README.md:
+
+```bash
+# Oracle XE - Motor de Base de Datos
+
+> **Acceso remoto habilitado.** Puerto expuesto en `0.0.0.0:1521`.
+> **Usuario por defecto:** `SYSTEM` (acceso remoto: habilitado via listener)
+```
+![readme](images/oracle-readme.png)
+
+## 7.2 Levantar el contenedor
+
+Se levantó el contenedor de Oracle con los puertos 1521 y 8080 expuestos.
+
+```bash
+cd ~/ia-lab/services/motores-bd/oracle
+sudo docker compose up -d
+```
+![](images/oracle-running.png)
+## 7.3 Conexión a Oracle
+
+Se verificó la conexión a Oracle como usuario SYSTEM para confirmar que el contenedor esté funcionando correctamente.
+
+```bash
+sudo docker exec -it oracle-xe sqlplus system/123456@XE
+```
+![conexion](images/oracle-connection.png)
+
+## 7.4 Creación de usuario propio
+
+Se conectó a Oracle como usuario SYSTEM y se creó el usuario harold con permisos de administrador.
+
+```bash
+sudo docker exec -it oracle-xe sqlplus system/123456@XE
+```
+
+```bash
+-- Conectar al PDB
+ALTER SESSION SET CONTAINER = XEPDB1;
+
+-- Crear tablespace
+CREATE TABLESPACE harold_ts DATAFILE '/opt/oracle/oradata/XE/XEPDB1/harold_ts.dbf' SIZE 100M AUTOEXTEND ON;
+
+-- Crear usuario
+CREATE USER harold IDENTIFIED BY 123456 DEFAULT TABLESPACE harold_ts QUOTA UNLIMITED ON harold_ts;
+
+-- Dar permisos
+GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE SEQUENCE, CREATE TRIGGER TO harold;
+GRANT DBA TO harold;
+```
+![crear nuevo usuario](images/oracle-create-user.png)
+
+## 7.5 Prueba del nuevo usuario
+
+Se probó la conexión a Oracle utilizando el nuevo usuario harold para verificar que funciona correctamente.
+
+```bash
+sudo docker exec -it oracle-xe sqlplus harold/123456@XEPDB1
+```
+
+```bash
+SELECT USER FROM dual;
+```
+![nuevo usuario](images/oracle-harold-test.png)
+
+## 7.6 Prueba de conexión desde DBeaver
+
+Una vez creado el usuario harold, se procedió a probar la conexión remota desde DBeaver.
+
+Obtener la IP de WSL:
+
+```bash
+hostname -I
+# IP obtenida: 172.24.20.10
+```
+![ip](images/ip-wls-postgres.png)
+![conectar desde dbeaver](images/oracle-dbeaver.png)
+![conectado](images/oracle-dbeaver-test.png)
+
+## 7.7 Backup de la base de datos
+
+Se realizó una copia de seguridad de la base de datos harold utilizando la herramienta exp de Oracle.
+
+```bash
+sudo docker exec oracle-xe exp harold/123456@XEPDB1 file=/opt/oracle/oradata/backup_harold.dmp owner=harold
+```
+
+![backup](images/oracle-backup.png)
