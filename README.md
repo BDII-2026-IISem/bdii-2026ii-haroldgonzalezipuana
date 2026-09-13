@@ -45,8 +45,8 @@ mkdir -p ~/ia-lab/services/motores-bd/{mysql,postgres,mssql,oracle}
 mkdir -p ~/ia-lab/data/{mysql,postgres,mssql,oracle}
 ```
 
-![Creacion de carpetas](images/folder-structure(2).png)
-![Estructura de carpetas](images/folder-structure(3).png)
+![Creacion de carpetas](images/folder-structure-2.png)
+![Estructura de carpetas](images/folder-structure-3.png)
 
 ## 3. Creación de la Red Docker
 
@@ -143,7 +143,7 @@ SELECT user, host FROM mysql.user WHERE user = 'harold';
 ```
 
 ![Verificación del usuario creado](images/mysql-verify-user.png)
-![Verificación del usuario creado](images/mysql-verify-user(2).png)
+![Verificación del usuario creado](images/mysql-verify-user-2.png)
 
 ## 4.5 Prueba del nuevo usuario
 
